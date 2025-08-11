@@ -1,0 +1,207 @@
+<script>
+    // Objeto principal que armazena todos os dados da aplicação.
+    let dadosDCA = {
+        aportes: [],
+        precoAtualBTC: 0,
+        // O valor inicial de BTC que você mencionou.
+        saldoInicialBTC: 0.01447383 
+    };
+
+    // --- FUNÇÕES DE FORMATAÇÃO E UTILITÁRIOS ---
+
+    function formatarMoeda(valor) {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+    }
+
+    function formatarBTC(valor) {
+        return valor.toFixed(8);
+    }
+
+    function formatarSatoshis(btc) {
+        return Math.round(btc * 100000000).toLocaleString('pt-BR');
+    }
+
+    function mostrarStatus(mensagem, tipo = 'success') {
+        const statusDiv = document.getElementById('statusMessage');
+        statusDiv.textContent = mensagem;
+        statusDiv.className = `status-message ${tipo}`;
+        statusDiv.style.display = 'block';
+        setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+    }
+
+    // --- FUNÇÕES DE LÓGICA E CÁLCULO ---
+
+    function adicionarAporte() {
+        const dataInput = document.getElementById('dataAporte');
+        const valorInput = document.getElementById('valorAporte');
+        const precoBTCInput = document.getElementById('precoBTC');
+        
+        const data = dataInput.value;
+        const valor = parseFloat(valorInput.value);
+        const precoBTC = parseFloat(precoBTCInput.value);
+
+        if (!data || !valor || valor <= 0 || !precoBTC || precoBTC <= 0) {
+            mostrarStatus('Por favor, preencha todos os campos do aporte corretamente!', 'error');
+            return;
+        }
+
+        const btcComprado = valor / precoBTC;
+        
+        const novoAporte = {
+            data: data,
+            valor: valor,
+            precoBTC: precoBTC,
+            btcComprado: btcComprado,
+        };
+
+        dadosDCA.aportes.push(novoAporte);
+        dadosDCA.aportes.sort((a, b) => new Date(a.data) - new Date(b.data)); // Mantém os aportes ordenados por data
+
+        salvarDados(); // Ponto chave: Salva os dados após a alteração
+        atualizarTudo(); // Atualiza a tela com os novos dados
+        
+        valorInput.value = '';
+        precoBTCInput.value = '';
+        dataInput.value = new Date().toISOString().split('T')[0]; // Reseta para a data de hoje
+        
+        mostrarStatus('🎉 Aporte adicionado com sucesso!', 'success');
+        document.querySelector('.btn').textContent = 'Adicionar Novo Aporte'; // Muda o texto do botão
+    }
+
+    function atualizarValores() {
+        const precoAtualInput = document.getElementById('precoAtualBTC');
+        const precoAtual = parseFloat(precoAtualInput.value);
+        
+        if (!precoAtual || precoAtual <= 0) {
+            mostrarStatus('Por favor, insira um preço atual válido!', 'error');
+            return;
+        }
+        
+        dadosDCA.precoAtualBTC = precoAtual;
+        salvarDados(); // Salva o novo preço atual
+        atualizarTudo();
+        mostrarStatus('Valores de cotação atualizados!', 'success');
+    }
+    
+    // --- FUNÇÕES DE ATUALIZAÇÃO DA INTERFACE (UI) ---
+
+    function atualizarTudo() {
+        atualizarInterface();
+        renderizarHistorico();
+    }
+    
+    function atualizarInterface() {
+        // Calcula totais com base nos aportes
+        const totalInvestido = dadosDCA.aportes.reduce((acc, aporte) => acc + aporte.valor, 0);
+        const totalBTCComprado = dadosDCA.aportes.reduce((acc, aporte) => acc + aporte.btcComprado, 0);
+        const totalBTCGeral = dadosDCA.saldoInicialBTC + totalBTCComprado;
+
+        document.getElementById('totalInvestido').textContent = formatarMoeda(totalInvestido);
+        document.getElementById('totalBTC').textContent = formatarBTC(totalBTCGeral);
+        document.querySelector('#totalBTC + .stat-subtitle').textContent = `${formatarSatoshis(totalBTCGeral)} satoshis`;
+        
+        const valorAtual = totalBTCGeral * dadosDCA.precoAtualBTC;
+        document.getElementById('valorAtual').textContent = formatarMoeda(valorAtual);
+        
+        const resultado = valorAtual - totalInvestido;
+        const percentual = totalInvestido > 0 ? (resultado / totalInvestido) * 100 : 0;
+        
+        const resultadoEl = document.getElementById('resultado');
+        const percentualEl = document.getElementById('percentualResultado');
+        
+        resultadoEl.textContent = formatarMoeda(resultado);
+        percentualEl.textContent = percentual.toFixed(2) + '%';
+        resultadoEl.className = `stat-value ${resultado >= 0 ? 'positive' : 'negative'}`;
+        percentualEl.className = `stat-subtitle ${resultado >= 0 ? 'positive' : 'negative'}`;
+        
+        const precoMedio = totalInvestido > 0 ? totalInvestido / totalBTCComprado : 0;
+        document.getElementById('precoMedio').textContent = formatarMoeda(precoMedio);
+        
+        document.getElementById('totalAportes').textContent = dadosDCA.aportes.length;
+        
+        if (dadosDCA.aportes.length > 0) {
+            const ultimaData = new Date(dadosDCA.aportes[dadosDCA.aportes.length - 1].data);
+            ultimaData.setDate(ultimaData.getDate() + 8); // Adiciona 8 para evitar problemas de fuso horário
+            document.getElementById('proximoAporte').textContent = ultimaData.toLocaleDateString('pt-BR');
+        } else {
+            document.getElementById('proximoAporte').textContent = "-";
+        }
+    }
+
+    function renderizarHistorico() {
+        const tbody = document.getElementById('historicoBody');
+        tbody.innerHTML = '';
+        
+        if (dadosDCA.aportes.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 30px; color: #666;">Você tem <strong>${formatarBTC(dadosDCA.saldoInicialBTC)} BTC</strong>. Adicione seu primeiro aporte para iniciar o DCA!</td></tr>`;
+            return;
+        }
+
+        let btcAcumuladoAposInicial = dadosDCA.saldoInicialBTC;
+        dadosDCA.aportes.forEach(aporte => {
+            btcAcumuladoAposInicial += aporte.btcComprado;
+            const valorNaEpoca = btcAcumuladoAposInicial * aporte.precoBTC;
+            
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td>${new Date(aporte.data + 'T00:00:00-03:00').toLocaleDateString('pt-BR')}</td>
+                <td>${formatarMoeda(aporte.valor)}</td>
+                <td>${formatarMoeda(aporte.precoBTC)}</td>
+                <td class="btc-symbol">${formatarBTC(aporte.btcComprado)}</td>
+                <td>${formatarSatoshis(aporte.btcComprado)}</td>
+                <td class="btc-symbol">${formatarBTC(btcAcumuladoAposInicial)}</td>
+                <td>${formatarMoeda(valorNaEpoca)}</td>
+            `;
+        });
+    }
+
+    // --- FUNÇÕES DE PERSISTÊNCIA DE DADOS (localStorage) ---
+
+    function salvarDados() {
+        // Converte o objeto de dados em uma string JSON e salva no localStorage
+        localStorage.setItem('meusDadosDCA', JSON.stringify(dadosDCA));
+        console.log('Dados salvos no navegador!');
+    }
+
+    function carregarDados() {
+        // Pega a string JSON do localStorage
+        const dadosSalvos = localStorage.getItem('meusDadosDCA');
+        
+        if (dadosSalvos) {
+            // Se encontrou dados, converte de volta para objeto e os utiliza
+            dadosDCA = JSON.parse(dadosSalvos);
+            console.log('Dados carregados do navegador:', dadosDCA);
+            // Garante que o saldo inicial não seja perdido se foi salvo sem ele em versões antigas
+            if (dadosDCA.saldoInicialBTC === undefined) {
+                dadosDCA.saldoInicialBTC = 0.01447383;
+            }
+        } else {
+            // Se não encontrou nada, usa os dados iniciais zerados (primeiro acesso)
+            console.log('Nenhum dado salvo encontrado. Iniciando dashboard.');
+        }
+
+        // Preenche os campos de input com os últimos valores conhecidos
+        document.getElementById('precoAtualBTC').value = dadosDCA.precoAtualBTC || '';
+    }
+
+    // --- INICIALIZAÇÃO DA PÁGINA ---
+
+    // Esta função é a primeira coisa a ser executada quando a página carrega.
+    window.onload = function() {
+        // 1. Carrega os dados salvos do navegador (se houver)
+        carregarDados();
+        
+        // 2. Define a data de hoje no campo de data
+        document.getElementById('dataAporte').value = new Date().toISOString().split('T')[0];
+        
+        // 3. Atualiza toda a interface com os dados carregados ou iniciais
+        atualizarTudo();
+
+        // 4. Muda o texto do botão se já houver aportes
+        if (dadosDCA.aportes.length > 0) {
+            document.querySelector('.btn').textContent = 'Adicionar Novo Aporte';
+        }
+        
+        console.log('Dashboard DCA inicializado.');
+    };
+</script>
