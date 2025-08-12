@@ -502,7 +502,7 @@
                 console.log('Dados carregados do navegador:', dadosDCA);
                 // Garante que o saldo inicial não seja perdido se foi salvo sem ele em versões antigas
                 if (dadosDCA.saldoInicialBTC === undefined) {
-                    dadosDCA.saldoInicialBTC = 0.01447383;
+                    dadosDCA.saldoInicialBTC = 0;
                 }
             } else {
                 // Se não encontrou nada, usa os dados iniciais zerados (primeiro acesso)
